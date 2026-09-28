@@ -11,51 +11,52 @@
 
 ---
 
-## 1. Executive Summary & Core Philosophy
+## 1. What is IPsecAI in Plain English?
 
-**IPsecAI** is a defensive cybersecurity framework designed to automatically parse IPsec VPN network captures (PCAP / PCAPNG), identify cryptographic and protocol configurations (IKEv1/v2, ESP/AH, Diffie-Hellman groups, PFS, Replay Windows, SA lifetimes), evaluate configuration posture against deterministic security rules grounded in **NIST SP 800-77 Rev. 1**, and infer underlying traffic categories from observable flow metadata without breaking encryption or inspecting encrypted payloads.
+### The Problem (Why This Matters)
+- When government agencies, defense bodies, and enterprises connect branch offices and datacenters over public networks, they use **IPsec VPN tunnels**.
+- An IPsec VPN encrypts all traffic passing through it.
+- **The Core Challenge**: Because everything is encrypted, network administrators and security auditors cannot easily answer two crucial questions:
+  1. *Is the VPN configuration strong and compliant, or is it using deprecated ciphers, weak Diffie-Hellman groups, or disabled anti-replay mechanisms?*
+  2. *What kind of application traffic is flowing inside (e.g., video conferencing, VoIP voice calls, messaging, large data transfers, or anomalous beacons) without breaking or decrypting the payload?*
 
-### Key Tenets:
-1. **Enterprise Security Console Style**: High-contrast, minimal, clear tabular layout, restrained blue accents, no AI buzzword clutter or neon styling.
-2. **Zero-Friction Demo Mode**: The application runs completely offline without requiring physical VPN gateways, TShark, Zeek, Kafka, or PostgreSQL.
-3. **Strict Data Honesty**:
-   - **Observed**: Parameters parsed directly from packet headers and IKE proposals.
-   - **Rule-Based Assessment**: Deterministic evaluation of observed parameters against NIST SP 800-77 rules.
-   - **AI-Inferred**: Traffic classification derived exclusively from statistical flow metadata (packet lengths, inter-arrival times, burst counts, volume ratios).
-   - **Never Payload Decryption**: Payloads remain encrypted; no claim of breaking encryption is ever made.
+### The IPsecAI Solution
+IPsecAI solves this using two distinct, ethical layers:
+1. **Deterministic Rule Engine (Security Audit)**: Inspects observable IKE/ESP negotiation parameters against **NIST SP 800-77 Rev. 1** guidelines and produces an explainable **0 to 100 prototype security score** with actionable recommendations.
+2. **AI Engine (Traffic Inference)**: Uses Machine Learning on **observable statistical flow metadata** (packet size distributions, inter-arrival time jitter, burst clustering, directional volume ratios) to classify encrypted traffic types (VoIP, Video, Web, Email, Messaging, ICMP) — **strictly without breaking encryption or inspecting encrypted payloads**.
 
 ---
 
 ## 2. Architecture & Pipeline
 
 ```
-                     INPUT
-     [ PCAP / PCAPNG / Live Demo Stream ]
-                       │
-                       ▼
-             TRAFFIC EXTRACTION
-       (TShark Parser / Fallback Engine)
-                       │
-                       ▼
-    PROTOCOL & CONFIGURATION IDENTIFICATION
-       (IKEv1/v2, ESP/AH, DH Group, SA)
-                       │
-        ┌──────────────┴──────────────┐
-        ▼                             ▼
-   RULE ENGINE                    ML ENGINE
-(NIST SP 800-77 Rules)     (Flow Feature Classifier)
-        │                             │
-   DETERMINISTIC                 INFERRED
-  SECURITY FINDINGS            TRAFFIC TYPES
-        │                             │
-        └──────────────┬──────────────┘
-                       ▼
-              UNIFIED ASSESSMENT
-         (Prototype Security Score 0-100)
-                       │
-                       ▼
-          TECHNICAL & EXECUTIVE REPORTS
-         (HTML / Markdown / JSON / CSV)
+                    CAPTURE INGESTION
+          [ PCAP / PCAPNG / Live Demo Stream ]
+                           │
+                           ▼
+                 TRAFFIC EXTRACTION
+          (TShark Safe Wrapper / Fallback)
+                           │
+                           ▼
+         PROTOCOL & CONFIGURATION PARSING
+           (IKEv1/v2, ESP/AH, DH Group, SA)
+                           │
+            ┌──────────────┴──────────────┐
+            ▼                             ▼
+       RULE ENGINE                    ML ENGINE
+    (NIST SP 800-77)            (Observable Features)
+            │                             │
+       DETERMINISTIC                  INFERRED
+      SECURITY FINDINGS             TRAFFIC TYPES
+            │                             │
+            └──────────────┬──────────────┘
+                           ▼
+                  UNIFIED ASSESSMENT
+             (Prototype Score: 0-100)
+                           │
+                           ▼
+              TECHNICAL & EXECUTIVE REPORTS
+             (HTML / Markdown / JSON / CSV)
 ```
 
 ---
@@ -98,7 +99,7 @@ streamlit run app/streamlit_app.py
 uvicorn backend.api:app --reload --port 8000
 ```
 
-Open `http://localhost:8501` in your browser.
+Open **`http://localhost:8501`** in your browser.
 
 ---
 
@@ -114,23 +115,57 @@ docker compose up --build
 
 ---
 
-## 5. Standard Demo Walkthrough (2-Minute Demonstration)
+## 5. Click-by-Click Testing & Demo Walkthrough
 
-The application comes pre-loaded with three distinct demonstration profiles:
+Once the UI is open at `http://localhost:8501`, follow this 5-step test sequence:
 
-1. **DEMO A (Healthy Enterprise Tunnel)**:
-   - **Configuration**: Tunnel mode, AES-256-GCM, DH Group 14 (MODP-2048), PFS Enabled, Replay Protection Active (Window 128), SA Lifetime 8h.
-   - **Expected Result**: High Security Score (~98/100), Low Risk Level, compliant pass across all categories.
-2. **DEMO B (Weak Legacy Profile)**:
-   - **Configuration**: Transport mode, AES-128-CBC + HMAC-SHA1, DH Group 2 (MODP-1024), PFS Disabled, Replay Protection Disabled, SA Lifetime 48h.
-   - **Expected Result**: Lower Security Score (~42/100), Critical/High Risk Level, 5 active findings requiring remediation.
-3. **DEMO C (Encrypted Multi-Flow Classification)**:
-   - **Configuration**: Tunnel mode with 6 concurrent encrypted application flows.
-   - **Expected Result**: Real-time AI classification into VoIP, Video Streaming, Web Browsing, Email, Messaging, and ICMP with probability distributions and observable feature explainability.
+### Step 1: Overview Page
+1. View the horizontal status bar:
+   - **Security Score**: `98 / 100` (Low Risk)
+   - **Findings**: `0`
+   - **AI Confidence**: `94%`
+2. **Test Weak Scenario**: Change profile dropdown to **Demo B (Weak Configuration)** and click **`[Load Demo Capture]`**.
+   - The score immediately updates to **`42 / 100` (Critical Risk)**, and 5 red/yellow findings appear (*Legacy 3DES/CBC, Weak DH Group 2, PFS Disabled, Replay Window Disabled*).
+
+### Step 2: Analyze Page
+1. Click **`2. Analyze`** in the sidebar.
+2. Inspect the **Protocol & Security Parameters** table (verifying clear distinction between **Observed**, **AI-Inferred**, and **Rule-Based Assessment**).
+3. Scroll to **AI-Assisted Encrypted Traffic Classification** to see flows classified into VoIP, Video, Web, etc., alongside the **Observable Feature Importance** chart.
+4. Toggle **"Live Demo Stream"** to watch live simulated packet arrivals with instant AI inferences.
+
+### Step 3: Security Assessment Page
+1. Click **`3. Security Assessment`** in the sidebar.
+2. Review the category results table (**Pass / Review / Concern**).
+3. Check the interactive **2-Axis Threat Matrix** (Likelihood vs Impact).
+4. Expand *"How this score is calculated"* to review the exact rule-by-rule point deduction breakdown.
+
+### Step 4: Testbed Page
+1. Click **`4. Testbed`** in the sidebar.
+2. Configure VPN parameters (Mode, Encryption, DH Group, PFS, Lifetime).
+3. Click **`[Generate Test Profile & Config Templates]`** to predict security posture and export ready-to-use **strongSwan (`ipsec.conf`)** and modern **`swanctl.conf`** snippets.
+
+### Step 5: Reports Page
+1. Click **`5. Reports`** in the sidebar.
+2. Toggle between **Technical Assessment Report** and **Executive Summary Briefing**.
+3. Download findings in **HTML**, **Markdown**, **JSON**, or **CSV** format.
+4. Download the **Sample Flow Dataset (CSV)** used for ML training.
 
 ---
 
-## 6. How the Prototype Scoring Model Works
+## 6. How to Pitch This to Hackathon Judges (60 Seconds)
+
+> *"Judges, IPsecAI addresses problem statement SIH26160 by automating the security assessment and traffic analysis of encrypted IPsec VPN tunnels.*  
+>  
+> *Unlike traditional network tools that require breaking encryption or manual packet inspection, IPsecAI operates on two ethical, compliant layers:*  
+>  
+> 1. *A **Deterministic Rule Engine** grounded in NIST SP 800-77 that inspects visible IKE/ESP negotiation parameters, detects weak ciphers and missing anti-replay windows, and produces a transparent 0-to-100 risk score.*  
+> 2. *An **AI Flow Classifier** that infers underlying application traffic types (VoIP, Video, Web, Messaging) purely from observable packet statistical characteristics without inspecting encrypted payloads.*  
+>  
+> *It runs zero-friction offline, provides complete technical and executive reports, and generates testbed deployment configs for strongSwan."*
+
+---
+
+## 7. How the Prototype Scoring Model Works
 
 The security score is a transparent weighted deduction model:
 
@@ -148,7 +183,7 @@ $$\text{Final Score} = \max\left(0, 100 - \sum \text{Rule Penalties}\right)$$
 
 ---
 
-## 7. AI Traffic Classification Methodology
+## 8. AI Traffic Classification Methodology
 
 Encrypted VPN traffic analysis operates purely on observable flow metadata:
 - Mean and standard deviation of packet lengths
@@ -158,15 +193,6 @@ Encrypted VPN traffic analysis operates purely on observable flow metadata:
 - Burst frequency and cluster density
 
 > **Explainability Guarantee**: Top contributing features are calculated per flow and visualized via Plotly bar charts.
-
----
-
-## 8. Testbed Configurator & Template Generator
-
-The Testbed tool allows security engineers to configure parameters and generate ready-to-use configuration templates:
-- strongSwan `ipsec.conf`
-- Modern strongSwan `swanctl.conf`
-- Predicted security score and findings before deployment
 
 ---
 
