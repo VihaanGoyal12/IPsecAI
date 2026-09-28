@@ -1,0 +1,169 @@
+# IPsecAI Security Assessment Rules Configuration
+# Grounded in NIST SP 800-77 Rev. 1 (Guide to IPsec VPNs), RFC 7296 (IKEv2), and RFC 4301 (IPsec Architecture)
+#
+# Rules are evaluated deterministically against observed session and security association parameters.
+
+rules:
+  # Cryptographic Algorithms
+  - id: IPSEC-CRYPTO-001
+    title: Legacy / Insecure Cipher (3DES / DES)
+    severity: High
+    category: Cryptography
+    target_field: encryption_algorithm
+    operator: in
+    values: ["3DES", "DES", "3DES-CBC", "DES-CBC"]
+    penalty: 25
+    explanation: "Legacy ciphers like DES and 3DES (Triple-DES) suffer from small 64-bit block sizes vulnerable to Sweet32 collision attacks and deprecated key lengths."
+    impact: "Confidentiality compromise through ciphertext collision recovery."
+    recommendation: "Migrate immediately to AES-256-GCM, AES-128-GCM, or ChaCha20-Poly1305."
+    reference: "NIST SP 800-77 Rev. 1 Sec 3.1.1; RFC 8221"
+
+  - id: IPSEC-CRYPTO-002
+    title: Unauthenticated Encryption / CBC Mode without Modern AEAD
+    severity: Medium
+    category: Cryptography
+    target_field: encryption_algorithm
+    operator: contains
+    values: ["CBC"]
+    penalty: 10
+    explanation: "CBC mode requires explicit padding and separate MAC authentication. While secure when paired with HMAC-SHA256 (Encrypt-then-MAC), modern AEAD suites (GCM) offer superior performance and side-channel resilience."
+    impact: "Sub-optimal performance and potential susceptibility to padding oracle weaknesses if integrity verification is misordered."
+    recommendation: "Adopt Authenticated Encryption with Associated Data (AEAD) such as AES-256-GCM."
+    reference: "NIST SP 800-77 Rev. 1 Sec 3.1.2; RFC 7296"
+
+  # Integrity & Authentication
+  - id: IPSEC-AUTH-001
+    title: Insecure Integrity Algorithm (MD5 / SHA-1)
+    severity: High
+    category: Authentication
+    target_field: integrity_algorithm
+    operator: in
+    values: ["MD5", "HMAC-MD5", "SHA1", "HMAC-SHA1", "SHA-1"]
+    penalty: 20
+    explanation: "MD5 and SHA-1 have known collision weaknesses and are formally deprecated for cryptographic integrity validation."
+    impact: "Potential message tampering or forging of packet authentication if collision resistance is broken."
+    recommendation: "Upgrade to HMAC-SHA2-256, HMAC-SHA2-512, or use an AEAD suite with built-in authentication."
+    reference: "NIST SP 800-131A Rev. 2; NIST SP 800-77 Rev. 1 Sec 3.1.3"
+
+  # Key Exchange & DH Groups
+  - id: IPSEC-DH-001
+    title: Deprecated Diffie-Hellman Group (MODP < 2048-bit)
+    severity: High
+    category: Key Exchange
+    target_field: dh_group
+    operator: in
+    values: ["Group 1", "Group 2", "Group 5", "MODP-768", "MODP-1024", "MODP-1536"]
+    penalty: 20
+    explanation: "Diffie-Hellman groups 1 (768-bit), 2 (1024-bit), and 5 (1536-bit) provide insufficient key exchange security margin against modern cryptanalysis."
+    impact: "Risk of passive decryption of session keys (Logjam attack class)."
+    recommendation: "Use Diffie-Hellman Group 14 (2048-bit MODP) or modern Elliptic Curve groups (Group 19: 256-bit ECP, Group 20: 384-bit ECP)."
+    reference: "NIST SP 800-77 Rev. 1 Sec 3.2.1; RFC 8247"
+
+  - id: IPSEC-DH-002
+    title: Acceptable Standard DH Group (MODP 2048-bit)
+    severity: Low
+    category: Key Exchange
+    target_field: dh_group
+    operator: in
+    values: ["Group 14", "MODP-2048"]
+    penalty: 2
+    explanation: "DH Group 14 (2048-bit MODP) meets minimum compliance guidelines, but modern Elliptic Curve groups (Group 19, 20) offer higher security with lower compute overhead."
+    impact: "Acceptable for legacy compliance, but higher CPU consumption during rekeying."
+    recommendation: "Consider upgrading to EC Group 19 (Curve25519 or NIST P-256) for faster handshakes and 128-bit equivalent security."
+    reference: "RFC 8247 Sec 2.4"
+
+  # Perfect Forward Secrecy (PFS)
+  - id: IPSEC-PFS-001
+    title: Perfect Forward Secrecy (PFS) Disabled
+    severity: Medium
+    category: PFS
+    target_field: pfs_enabled
+    operator: eq
+    values: [false]
+    penalty: 15
+    explanation: "PFS ensures that compromise of long-term credentials or a single session key does not compromise past session traffic. When disabled, child SAs derive keys without fresh DH exchanges."
+    impact: "Past encrypted traffic can be decrypted if the long-term IKE SA secret is compromised."
+    recommendation: "Enable PFS on Phase 2 / Child SA configurations with DH Group 14, 19, or 20."
+    reference: "NIST SP 800-77 Rev. 1 Sec 3.2.3"
+
+  # Replay Protection
+  - id: IPSEC-REPLAY-001
+    title: Anti-Replay Protection Disabled
+    severity: High
+    category: Replay Protection
+    target_field: replay_protection_enabled
+    operator: eq
+    values: [false]
+    penalty: 15
+    explanation: "IPsec anti-replay mechanism uses packet sequence numbers and a sliding window to detect and drop duplicated packets."
+    impact: "Vulnerability to replay attacks where adversaries resend intercepted valid packets to disrupt services or duplicate actions."
+    recommendation: "Enable ESP anti-replay window with a minimum window size of 64 or 128 packets."
+    reference: "RFC 4301 Sec 4.4.2.1; NIST SP 800-77 Rev. 1"
+
+  # SA Lifetime & Rekeying
+  - id: IPSEC-LIFETIME-001
+    title: Excessive SA Lifetime (> 86400 seconds)
+    severity: Medium
+    category: SA Lifetime
+    target_field: sa_lifetime_seconds
+    operator: gt
+    values: [86400]
+    penalty: 8
+    explanation: "Security Association lifetime exceeds recommended operational threshold (24 hours). Extended key lifetimes expose more ciphertext under a single key."
+    impact: "Larger window for statistical cryptanalysis and key wear-out."
+    recommendation: "Set Phase 2 SA lifetime between 28800s (8h) and 86400s (24h) or volume limit <= 4GB."
+    reference: "NIST SP 800-77 Rev. 1 Sec 3.2.4"
+
+  - id: IPSEC-LIFETIME-002
+    title: Inadequate Volume-Based Rekeying Threshold
+    severity: Low
+    category: SA Lifetime
+    target_field: sa_volume_limit_mb
+    operator: gt
+    values: [10000]
+    penalty: 3
+    explanation: "Volume-based rekeying limit is set above 10 GB. Fast link saturation could exceed safe nonce/IV limits."
+    impact: "Potential IV exhaustion under high-throughput data streams."
+    recommendation: "Configure rekeying volume limits around 4 GB (4096 MB) for high-bandwidth tunnels."
+    reference: "RFC 7296 Sec 2.8"
+
+  # Protocol & Mode Configuration
+  - id: IPSEC-MODE-001
+    title: Transport Mode Used Over Public / Untrusted Transit
+    severity: Medium
+    category: Configuration
+    target_field: vpn_mode
+    operator: eq
+    values: ["Transport"]
+    penalty: 10
+    explanation: "Transport mode protects only the payload, leaving the original inner IP headers exposed to intermediate observers."
+    impact: "Internal host addressing, routing topology, and endpoint identities are exposed to transit networks."
+    recommendation: "Use Tunnel mode for site-to-site and remote-access VPNs spanning public or untrusted transit."
+    reference: "RFC 4301 Sec 4.1; NIST SP 800-77 Rev. 1 Sec 2.2"
+
+  - id: IPSEC-PROTO-001
+    title: Legacy IKEv1 Protocol Detected
+    severity: Medium
+    category: Configuration
+    target_field: ike_version
+    operator: eq
+    values: ["IKEv1", "ISAKMP"]
+    penalty: 12
+    explanation: "IKEv1 uses complex, multi-round exchanges (Main Mode / Aggressive Mode) with known vulnerabilities and lacks modern NAT traversal and EAP optimizations."
+    impact: "Slower handshakes, aggressive mode pre-shared key offline dictionary attacks."
+    recommendation: "Upgrade all IPsec endpoints to IKEv2 (RFC 7296)."
+    reference: "NIST SP 800-77 Rev. 1 Sec 2.3; RFC 7296"
+
+  # Metadata & Side-Channel Exposure
+  - id: IPSEC-META-001
+    title: Flow Metadata & Packet Size Side-Channel Observable
+    severity: Low
+    category: Metadata Exposure
+    target_field: metadata_padding_enabled
+    operator: eq
+    values: [false]
+    penalty: 4
+    explanation: "Fixed or unpadded packet size distributions permit passive observers to infer underlying application traffic types via flow statistical fingerprints."
+    impact: "Traffic fingerprinting and application identification despite strong payload encryption."
+    recommendation: "Evaluate ESP Traffic Flow Confidentiality (TFC) padding (RFC 4303) if application confidentiality against traffic analysis is required."
+    reference: "RFC 4303 Sec 2.4; NIST SP 800-77 Rev. 1"
